@@ -46,7 +46,8 @@ project "Vulkan Testing"
 
 	links {
 	
-		"GLFW"
+		"GLFW",
+		"C:/VulkanSDK/1.1.121.0/Lib/vulkan-1.lib"
 
 	}
 
