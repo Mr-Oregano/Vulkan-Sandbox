@@ -1,0 +1,11 @@
+# directories
+.vs
+bin/
+bin-int/
+
+# files
+*.sln
+*.user
+*.vcxproj
+*.filters
+vs2019build.bat
