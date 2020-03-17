@@ -28,6 +28,8 @@ private:
 
 	void SelectPhysicalDevice();
 
+	void CreateLogicalDevice();
+
 	void Update();
 	void Shutdown();
 
@@ -35,7 +37,11 @@ private:
 	GLFWwindow *m_Window = nullptr;
 	VkInstance m_VulkanInstance = { 0 };
 	VkDebugUtilsMessengerEXT m_DebugMessenger = { 0 };
-	VkPhysicalDevice m_Device = VK_NULL_HANDLE;
+
+	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+	VkDevice m_Device = VK_NULL_HANDLE;
+
+	VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
 
 	const std::vector<const char *> m_ValidationLayers = {
 

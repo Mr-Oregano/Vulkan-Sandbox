@@ -56,6 +56,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	return VK_FALSE;
 
 }
+
 void SetupDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo)
 {
 
@@ -141,6 +142,7 @@ void Application::InitVulkan()
 	this->CreateVulkanInstance();
 	this->CreateDebugMessenger();
 	this->SelectPhysicalDevice();
+	this->CreateLogicalDevice();
 
 }
 
@@ -308,13 +310,58 @@ void Application::SelectPhysicalDevice()
 			default:										LOG_INFO("\tTYPE: UNKNOWN");
 			}
 
-			this->m_Device = device;
+			this->m_PhysicalDevice = device;
 			break;
 		}
 	}
 
-	if (!this->m_Device)
+	if (!this->m_PhysicalDevice)
 		LOG_CRITICAL("Failed to find a suitable device for vulkan!");
+}
+
+void Application::CreateLogicalDevice()
+{
+
+	QueueFamilyIndices indices = FindQueueFamilies(this->m_PhysicalDevice);
+	float queuePriorities[] = { 1.0f };
+
+	VkDeviceQueueCreateInfo queueCreateInfo = {};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
+	queueCreateInfo.queueCount = 1;
+	queueCreateInfo.pQueuePriorities = queuePriorities;
+	queueCreateInfo.pNext = nullptr;
+	queueCreateInfo.flags = 0;
+
+	VkPhysicalDeviceFeatures deviceFeatures = { 0 };
+
+	VkDeviceCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.pEnabledFeatures = &deviceFeatures;
+
+	// Logical Device extensions
+	createInfo.enabledExtensionCount = 0;
+	createInfo.ppEnabledExtensionNames = nullptr;
+	//
+
+	// Although ignored in recent API versions
+	// still a good idea to fill out layers
+	createInfo.enabledLayerCount = 0;
+	createInfo.ppEnabledLayerNames = nullptr;
+
+	if (this->m_EnableValidationLayers)
+	{
+		createInfo.enabledLayerCount = (uint32_t) this->m_ValidationLayers.size();
+		createInfo.ppEnabledLayerNames = this->m_ValidationLayers.data();
+	}
+
+	if (vkCreateDevice(this->m_PhysicalDevice, &createInfo, nullptr, &this->m_Device) != VK_SUCCESS)
+		LOG_CRITICAL("Failed to create the logical device!");
+
+	vkGetDeviceQueue(this->m_Device, indices.GraphicsFamily.value(), 0, &this->m_GraphicsQueue);
+
 }
 
 void Application::Update()
@@ -331,6 +378,8 @@ void Application::Update()
 }
 void Application::Shutdown()
 {
+
+	vkDestroyDevice(this->m_Device, nullptr);
 
 	if (this->m_EnableValidationLayers)
 		this->DestroyDebugMessenger();
