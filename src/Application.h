@@ -7,6 +7,23 @@
 #include <functional>
 #include <vector>
 
+#include <vector>
+#include <optional>
+#include <cstring>
+#include <set>
+
+struct QueueFamilyIndices
+{
+	std::optional<uint32_t> GraphicsFamily;
+	std::optional<uint32_t> PresentFamily;
+
+	inline bool AllAvailable()
+	{
+		return GraphicsFamily.has_value()
+			&& PresentFamily.has_value();
+	}
+};
+
 // TODO: maybe create a custom memory allocator for Vulkan.
 class Application
 {
@@ -26,7 +43,11 @@ private:
 	void CreateDebugMessenger();
 	void DestroyDebugMessenger();
 
+	void CreateVulkanSurface();
+
 	void SelectPhysicalDevice();
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+	bool IsDeviceSuitable(VkPhysicalDevice device);
 
 	void CreateLogicalDevice();
 
@@ -37,11 +58,13 @@ private:
 	GLFWwindow *m_Window = nullptr;
 	VkInstance m_VulkanInstance = { 0 };
 	VkDebugUtilsMessengerEXT m_DebugMessenger = { 0 };
+	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
 
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 	VkDevice m_Device = VK_NULL_HANDLE;
 
 	VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
+	VkQueue m_PresentQueue = VK_NULL_HANDLE;
 
 	const std::vector<const char *> m_ValidationLayers = {
 

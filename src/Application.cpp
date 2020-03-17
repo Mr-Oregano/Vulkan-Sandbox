@@ -2,17 +2,7 @@
 #include "Application.h"
 #include "Log.h"
 
-#include <vector>
-#include <optional>
-#include <cstring>	
-
-struct QueueFamilyIndices
-{
-	std::optional<uint32_t> GraphicsFamily;
-	inline bool AllAvailable() { return GraphicsFamily.has_value(); }
-};
-
-QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+QueueFamilyIndices Application::FindQueueFamilies(VkPhysicalDevice device)
 {
 
 	QueueFamilyIndices indices = { 0 };
@@ -23,11 +13,17 @@ QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
 	std::vector<VkQueueFamilyProperties> props(propCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &propCount, props.data());
 
-	int index = 0;
+	uint32_t index = 0;
 	for (const auto &prop : props)
 	{
 		if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			indices.GraphicsFamily = index;
+
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, index, this->m_Surface, &presentSupport);
+
+		if (presentSupport)
+			indices.PresentFamily = index;
 
 		if (indices.AllAvailable())
 			break;
@@ -76,10 +72,10 @@ void SetupDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo)
 	createInfo.flags = 0;
 
 }
-bool IsDeviceSuitable(VkPhysicalDevice device)
+bool Application::IsDeviceSuitable(VkPhysicalDevice device)
 {
 
-	return FindQueueFamilies(device).AllAvailable();
+	return this->FindQueueFamilies(device).AllAvailable();
 
 }
 
@@ -96,9 +92,7 @@ void Application::Run()
 }
 void Application::InitWindow()
 {
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
+	
 	if (!glfwInit())
 	{
 		LOG_CRITICAL("Failed to initialize the GLFW Library!");
@@ -107,6 +101,7 @@ void Application::InitWindow()
 
 	LOG_INFO("Initialized the GLFW libary with no OpenGL!");
 
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
@@ -141,6 +136,7 @@ void Application::InitVulkan()
 
 	this->CreateVulkanInstance();
 	this->CreateDebugMessenger();
+	this->CreateVulkanSurface();
 	this->SelectPhysicalDevice();
 	this->CreateLogicalDevice();
 
@@ -273,6 +269,12 @@ void Application::DestroyDebugMessenger()
 
 }
 
+void Application::CreateVulkanSurface()
+{
+	if (glfwCreateWindowSurface(this->m_VulkanInstance, this->m_Window, nullptr, &this->m_Surface) != VK_SUCCESS)
+		LOG_CRITICAL("Failed to create Win32 surface!");
+}
+
 void Application::SelectPhysicalDevice()
 {
 
@@ -322,23 +324,32 @@ void Application::SelectPhysicalDevice()
 void Application::CreateLogicalDevice()
 {
 
-	QueueFamilyIndices indices = FindQueueFamilies(this->m_PhysicalDevice);
+	QueueFamilyIndices indices = this->FindQueueFamilies(this->m_PhysicalDevice);
 	float queuePriorities[] = { 1.0f };
 
-	VkDeviceQueueCreateInfo queueCreateInfo = {};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
-	queueCreateInfo.queueCount = 1;
-	queueCreateInfo.pQueuePriorities = queuePriorities;
-	queueCreateInfo.pNext = nullptr;
-	queueCreateInfo.flags = 0;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<uint32_t> uniqueQueueFamilies = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+
+	for (uint32_t queueFamily : uniqueQueueFamilies)
+	{
+
+		VkDeviceQueueCreateInfo queueCreateInfo = {};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = queuePriorities;
+		queueCreateInfo.pNext = nullptr;
+		queueCreateInfo.flags = 0;
+		queueCreateInfos.push_back(queueCreateInfo);
+
+	}
 
 	VkPhysicalDeviceFeatures deviceFeatures = { 0 };
 
 	VkDeviceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = 1;
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.queueCreateInfoCount = (uint32_t) queueCreateInfos.size();
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
 	// Logical Device extensions
@@ -361,6 +372,7 @@ void Application::CreateLogicalDevice()
 		LOG_CRITICAL("Failed to create the logical device!");
 
 	vkGetDeviceQueue(this->m_Device, indices.GraphicsFamily.value(), 0, &this->m_GraphicsQueue);
+	vkGetDeviceQueue(this->m_Device, indices.PresentFamily.value(), 0, &this->m_PresentQueue);
 
 }
 
@@ -379,6 +391,7 @@ void Application::Update()
 void Application::Shutdown()
 {
 
+	vkDestroySurfaceKHR(this->m_VulkanInstance, this->m_Surface, nullptr);
 	vkDestroyDevice(this->m_Device, nullptr);
 
 	if (this->m_EnableValidationLayers)
