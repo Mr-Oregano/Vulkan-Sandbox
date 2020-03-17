@@ -3,7 +3,41 @@
 #include "Log.h"
 
 #include <vector>
-#include <cstring>
+#include <optional>
+#include <cstring>	
+
+struct QueueFamilyIndices
+{
+	std::optional<uint32_t> GraphicsFamily;
+	inline bool AllAvailable() { return GraphicsFamily.has_value(); }
+};
+
+QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+{
+
+	QueueFamilyIndices indices = { 0 };
+
+	uint32_t propCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &propCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> props(propCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &propCount, props.data());
+
+	int index = 0;
+	for (const auto &prop : props)
+	{
+		if (prop.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			indices.GraphicsFamily = index;
+
+		if (indices.AllAvailable())
+			break;
+
+		++index;
+	}
+
+	return indices;
+
+}
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -20,6 +54,31 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	}
 
 	return VK_FALSE;
+
+}
+void SetupDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo)
+{
+
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	createInfo.messageSeverity =
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType =
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+	createInfo.pfnUserCallback = &DebugCallback;
+	createInfo.pUserData = nullptr;
+	createInfo.pNext = nullptr;
+	createInfo.flags = 0;
+
+}
+bool IsDeviceSuitable(VkPhysicalDevice device)
+{
+
+	return FindQueueFamilies(device).AllAvailable();
 
 }
 
@@ -81,6 +140,7 @@ void Application::InitVulkan()
 
 	this->CreateVulkanInstance();
 	this->CreateDebugMessenger();
+	this->SelectPhysicalDevice();
 
 }
 
@@ -116,7 +176,7 @@ void Application::CreateVulkanInstance()
 		vkInstanceInfo.enabledLayerCount = (uint32_t)this->m_ValidationLayers.size();
 		vkInstanceInfo.ppEnabledLayerNames = this->m_ValidationLayers.data();
 
-		this->SetupDebugMessengerInfo(createInfo);
+		SetupDebugMessengerInfo(createInfo);
 		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &createInfo;
 
 	}
@@ -176,44 +236,27 @@ bool Application::CheckValidationLayerSupport()
 
 }
 
-void Application::SetupDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo)
-{
-
-	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	createInfo.messageSeverity = 
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | 
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | 
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	createInfo.messageType = 
-		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
-		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | 
-		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-	createInfo.pfnUserCallback = &DebugCallback;
-	createInfo.pUserData = nullptr;
-	createInfo.pNext = nullptr;
-	createInfo.flags = 0;
-
-}
-VkResult Application::CreateDebugMessenger()
+void Application::CreateDebugMessenger()
 {
 
 	if (!this->m_EnableValidationLayers)
-		return VK_SUCCESS;
+		return;
 
 	VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-	this->SetupDebugMessengerInfo(createInfo);
+	SetupDebugMessengerInfo(createInfo);
 
 	auto vkCreateDebugUtilsMessenger = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(this->m_VulkanInstance, "vkCreateDebugUtilsMessengerEXT");
-
+	
+	VkResult result = VK_SUCCESS;
 	if (vkCreateDebugUtilsMessenger)
-		return vkCreateDebugUtilsMessenger(
+		result = vkCreateDebugUtilsMessenger(
 			this->m_VulkanInstance,
 			&createInfo,
 			nullptr,
 			&this->m_DebugMessenger);
 
-	return VK_ERROR_EXTENSION_NOT_PRESENT;
+	if (result != VK_SUCCESS)
+		LOG_WARNING("Failed to create Vulkan Debug Utils Messenger");
 }
 void Application::DestroyDebugMessenger()
 {
@@ -226,6 +269,52 @@ void Application::DestroyDebugMessenger()
 			this->m_DebugMessenger,
 			nullptr);
 
+}
+
+void Application::SelectPhysicalDevice()
+{
+
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(this->m_VulkanInstance, &deviceCount, nullptr);
+
+	if (!deviceCount)
+		LOG_CRITICAL("Failed to find any physical devices for vulkan on this system!");
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(this->m_VulkanInstance, &deviceCount, devices.data());
+
+	for (const auto &device : devices)
+	{
+		if (IsDeviceSuitable(device))
+		{
+			VkPhysicalDeviceProperties props = {};
+			vkGetPhysicalDeviceProperties(device, &props);
+
+			LOG_INFO("Selecting Device {0} - {1}", props.deviceID, props.deviceName);
+			LOG_INFO("\tDRIVER VERSION: {0}", 
+				props.driverVersion);
+
+			LOG_INFO("\tAPI VERSION: {0}.{1}.{2}",
+				VK_VERSION_MAJOR(props.apiVersion),
+				VK_VERSION_MINOR(props.apiVersion),
+				VK_VERSION_PATCH(props.apiVersion));
+
+			switch (props.deviceType)
+			{
+			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:	LOG_INFO("\tTYPE: Integrated GPU"); break;
+			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:		LOG_INFO("\tTYPE: Dedicated GPU"); break;
+			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:		LOG_INFO("\tTYPE: Virtual GPU"); break;
+			case VK_PHYSICAL_DEVICE_TYPE_CPU:				LOG_INFO("\tTYPE: CPU"); break;
+			default:										LOG_INFO("\tTYPE: UNKNOWN");
+			}
+
+			this->m_Device = device;
+			break;
+		}
+	}
+
+	if (!this->m_Device)
+		LOG_CRITICAL("Failed to find a suitable device for vulkan!");
 }
 
 void Application::Update()

@@ -23,19 +23,21 @@ private:
 	void CreateVulkanInstance();
 	bool CheckValidationLayerSupport();
 	
-	void SetupDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
-	VkResult CreateDebugMessenger();
+	void CreateDebugMessenger();
 	void DestroyDebugMessenger();
+
+	void SelectPhysicalDevice();
 
 	void Update();
 	void Shutdown();
 
 private:
-	GLFWwindow *m_Window = NULL;
+	GLFWwindow *m_Window = nullptr;
 	VkInstance m_VulkanInstance = { 0 };
 	VkDebugUtilsMessengerEXT m_DebugMessenger = { 0 };
+	VkPhysicalDevice m_Device = VK_NULL_HANDLE;
 
-	std::vector<const char *> m_ValidationLayers = {
+	const std::vector<const char *> m_ValidationLayers = {
 
 		"VK_LAYER_KHRONOS_validation"
 
