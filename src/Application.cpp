@@ -166,6 +166,7 @@ void Application::InitVulkan()
 	this->SelectPhysicalDevice();
 	this->CreateLogicalDevice();
 	this->CreateSwapChain();
+	this->CreateSwapChainImageViews();
 
 }
 
@@ -219,10 +220,8 @@ void Application::CreateVulkanInstance()
 	if (vkCreateInstance(&createInfo, nullptr, &this->m_VulkanInstance) != VK_SUCCESS)
 	{
 		LOG_CRITICAL("Failed to create a Vulkan instance!");
-		return;
+		exit(-1);
 	}
-
-	LOG_INFO("Successfully created a Vulkan instance!");
 
 	// TODO: As a challenge, try to create a function that checks if all of the extensions 
 	//		 returned by glfwGetRequiredInstanceExtensions are included in the supported extensions list.
@@ -272,7 +271,10 @@ void Application::CreateDebugMessenger()
 			&this->m_DebugMessenger);
 
 	if (result != VK_SUCCESS)
+	{
 		LOG_WARNING("Failed to create Vulkan Debug Utils Messenger");
+		exit(-1);
+	}
 }
 void Application::DestroyDebugMessenger()
 {
@@ -290,7 +292,10 @@ void Application::DestroyDebugMessenger()
 void Application::CreateVulkanSurface()
 {
 	if (glfwCreateWindowSurface(this->m_VulkanInstance, this->m_Window, nullptr, &this->m_Surface) != VK_SUCCESS)
+	{
 		LOG_CRITICAL("Failed to create Win32 surface!");
+		exit(-1);
+	}
 }
 
 void Application::SelectPhysicalDevice()
@@ -300,7 +305,10 @@ void Application::SelectPhysicalDevice()
 	vkEnumeratePhysicalDevices(this->m_VulkanInstance, &deviceCount, nullptr);
 
 	if (!deviceCount)
+	{
 		LOG_CRITICAL("Failed to find any physical devices for vulkan on this system!");
+		exit(-1);
+	}
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(this->m_VulkanInstance, &deviceCount, devices.data());
@@ -336,7 +344,10 @@ void Application::SelectPhysicalDevice()
 	}
 
 	if (!this->m_PhysicalDevice)
+	{
 		LOG_CRITICAL("Failed to find a suitable device for vulkan!");
+		exit(-1);
+	}
 }
 
 void Application::CreateLogicalDevice()
@@ -385,7 +396,10 @@ void Application::CreateLogicalDevice()
 	}
 
 	if (vkCreateDevice(this->m_PhysicalDevice, &createInfo, nullptr, &this->m_Device) != VK_SUCCESS)
+	{
 		LOG_CRITICAL("Failed to create the logical device!");
+		exit(-1);
+	}
 
 	vkGetDeviceQueue(this->m_Device, indices.GraphicsFamily.value(), 0, &this->m_GraphicsQueue);
 	vkGetDeviceQueue(this->m_Device, indices.PresentFamily.value(), 0, &this->m_PresentQueue);
@@ -415,8 +429,6 @@ SwapChainCapabilities Application::RetrieveSwapChainCapabilities(VkPhysicalDevic
 		caps.presentModes.resize(presentModeCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(device, this->m_Surface, &presentModeCount, caps.presentModes.data());
 	}
-
-
 
 	return caps;
 }
@@ -507,13 +519,51 @@ void Application::CreateSwapChain()
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
 	if (vkCreateSwapchainKHR(this->m_Device, &createInfo, nullptr, &this->m_SwapChain) != VK_SUCCESS)
+	{
 		LOG_CRITICAL("Failed to create Swap Chain!");
+		exit(-1);
+	}
 
 	uint32_t swapChainImageCount = 0;
 	vkGetSwapchainImagesKHR(this->m_Device, this->m_SwapChain, &swapChainImageCount, nullptr);
 
 	this->m_SwapChainImages.resize(swapChainImageCount);
 	vkGetSwapchainImagesKHR(this->m_Device, this->m_SwapChain, &swapChainImageCount, this->m_SwapChainImages.data());
+
+}
+
+void Application::CreateSwapChainImageViews()
+{
+
+	this->m_SwapChainImageViews.resize(this->m_SwapChainImages.size());
+
+	for (int i = 0; i < this->m_SwapChainImages.size(); ++i)
+	{
+		VkImageViewCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = this->m_SwapChainImages[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = this->m_SwapChainFormat;
+
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(this->m_Device, &createInfo, nullptr, &this->m_SwapChainImageViews[i]) != VK_SUCCESS)
+		{
+			LOG_CRITICAL("Failed to create Swap Chain image views!");
+			exit(-1);
+		}
+	}
+
+	LOG_INFO("Created all Swap Chain image views!");
 
 }
 
@@ -531,6 +581,9 @@ void Application::Update()
 }
 void Application::Shutdown()
 {
+
+	for (VkImageView view : this->m_SwapChainImageViews)
+		vkDestroyImageView(this->m_Device, view, nullptr);
 
 	vkDestroySwapchainKHR(this->m_Device, this->m_SwapChain, nullptr);
 	vkDestroySurfaceKHR(this->m_VulkanInstance, this->m_Surface, nullptr);

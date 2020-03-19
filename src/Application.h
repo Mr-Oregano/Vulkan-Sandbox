@@ -69,6 +69,8 @@ private:
 	VkExtent2D SelectSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 	void CreateSwapChain();
 
+	void CreateSwapChainImageViews();
+
 	void Update();
 	void Shutdown();
 
@@ -92,6 +94,8 @@ private:
 	std::vector<VkImage> m_SwapChainImages;
 	VkFormat m_SwapChainFormat;
 	VkExtent2D m_SwapChainExtent = { 0 };
+
+	std::vector<VkImageView> m_SwapChainImageViews;
 
 	const std::vector<const char *> m_ValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"
