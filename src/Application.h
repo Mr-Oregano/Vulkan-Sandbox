@@ -1,16 +1,18 @@
 #pragma once
 
+#define NOMINMAX
 #include <Windows.h>
 #include <GLFW/glfw3.h>
 
 #include <memory>
 #include <functional>
 #include <vector>
-
-#include <vector>
 #include <optional>
-#include <cstring>
 #include <set>
+#include <algorithm>
+
+#include <cstring>
+#include <cstdint>
 
 struct QueueFamilyIndices
 {
@@ -22,6 +24,15 @@ struct QueueFamilyIndices
 		return GraphicsFamily.has_value()
 			&& PresentFamily.has_value();
 	}
+};
+
+struct SwapChainCapabilities
+{
+
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+
 };
 
 // TODO: maybe create a custom memory allocator for Vulkan.
@@ -48,14 +59,25 @@ private:
 	void SelectPhysicalDevice();
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 	bool IsDeviceSuitable(VkPhysicalDevice device);
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 	void CreateLogicalDevice();
+
+	SwapChainCapabilities RetrieveSwapChainCapabilities(VkPhysicalDevice device);
+	VkSurfaceFormatKHR SelectSwapChainSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats);
+	VkPresentModeKHR SelectSwapChainPresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+	VkExtent2D SelectSwapChainExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+	void CreateSwapChain();
 
 	void Update();
 	void Shutdown();
 
 private:
+	const char* m_WindowTitle = "Vulkan Testing";
+	const int m_WindowWidth = 1280;
+	const int m_WindowHeight = 720;
 	GLFWwindow *m_Window = nullptr;
+	
 	VkInstance m_VulkanInstance = { 0 };
 	VkDebugUtilsMessengerEXT m_DebugMessenger = { 0 };
 	VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
@@ -66,10 +88,17 @@ private:
 	VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
 	VkQueue m_PresentQueue = VK_NULL_HANDLE;
 
+	VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;
+	std::vector<VkImage> m_SwapChainImages;
+	VkFormat m_SwapChainFormat;
+	VkExtent2D m_SwapChainExtent = { 0 };
+
 	const std::vector<const char *> m_ValidationLayers = {
-
 		"VK_LAYER_KHRONOS_validation"
+	};
 
+	const std::vector<const char *> m_RequiredExtensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
 	bool m_EnableValidationLayers = true;
