@@ -81,13 +81,18 @@ private:
 	void CreateCommandPool();
 	void CreateCommandBuffers();
 
+	void CreateSyncObjects();
+
 	void Update();
+	void DrawFrame();
 	void Shutdown();
 
 private:
 	const char* m_WindowTitle = "Vulkan Testing";
 	const int m_WindowWidth = 1280;
 	const int m_WindowHeight = 720;
+	const int MAX_FRAMES_IN_FLIGHT = 2;
+	size_t current_frame = 0;
 	GLFWwindow *m_Window = nullptr;
 	
 	VkInstance m_VulkanInstance = { 0 };
@@ -115,6 +120,11 @@ private:
 
 	VkCommandPool m_CommandPool;
 	std::vector<VkCommandBuffer> m_CommandBuffers;
+
+	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+	std::vector<VkSemaphore> m_RenderFinshedSemaphores;
+	std::vector<VkFence> m_InFlightFences;
+	std::vector<VkFence> m_ImagesInFlight;
 
 	const std::vector<const char *> m_ValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"

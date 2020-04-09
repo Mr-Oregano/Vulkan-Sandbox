@@ -193,6 +193,7 @@ void Application::InitVulkan()
 	this->CreateFramebuffers();
 	this->CreateCommandPool();
 	this->CreateCommandBuffers();
+	this->CreateSyncObjects();
 
 }
 
@@ -611,12 +612,22 @@ void Application::CreateRenderPass()
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
 
+	VkSubpassDependency dependency = {};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCreateInfo.attachmentCount = 1;
 	renderPassCreateInfo.pAttachments = &colorAttachment;
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subpass;
+	renderPassCreateInfo.dependencyCount = 1;
+	renderPassCreateInfo.pDependencies = &dependency;
 
 	if (vkCreateRenderPass(this->m_Device, &renderPassCreateInfo, nullptr, &this->m_RenderPass) != VK_SUCCESS)
 	{
@@ -882,7 +893,7 @@ void Application::CreateCommandBuffers()
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = this->m_SwapChainExtent;
 
-		VkClearValue clearColor = { 0.1f, 0.0f, 0.2f, 1.0f };
+		VkClearValue clearColor = { 0.015f, 0.015f, 0.02f, 1.0f };
 		renderPassInfo.clearValueCount = 1;
 		renderPassInfo.pClearValues = &clearColor;
 
@@ -897,8 +908,40 @@ void Application::CreateCommandBuffers()
 			exit(-1);
 		}
 	}
+}
 
-	LOG_INFO("Successfully created all command buffers!");
+void Application::CreateSyncObjects()
+{
+
+	this->m_ImageAvailableSemaphores.resize(this->MAX_FRAMES_IN_FLIGHT);
+	this->m_RenderFinshedSemaphores.resize(this->MAX_FRAMES_IN_FLIGHT);
+	this->m_InFlightFences.resize(this->MAX_FRAMES_IN_FLIGHT);
+	this->m_ImagesInFlight.resize(this->m_SwapChainImages.size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (int i = 0; i < this->MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		if (vkCreateSemaphore(this->m_Device, &semaphoreCreateInfo, nullptr, &this->m_ImageAvailableSemaphores[i]) != VK_SUCCESS
+		|| vkCreateSemaphore(this->m_Device, &semaphoreCreateInfo, nullptr, &this->m_RenderFinshedSemaphores[i]) != VK_SUCCESS
+		|| vkCreateFence(this->m_Device, &fenceCreateInfo, nullptr, &this->m_InFlightFences[i]) != VK_SUCCESS)
+		{
+			LOG_CRITICAL("Failed to create sync objects!");
+			exit(-1);
+		}
+	}
+}
+
+bool IsEqual(int x)
+{
+
+	int y = 0;
+	return x == y;
 
 }
 
@@ -908,14 +951,74 @@ void Application::Update()
 	glfwShowWindow(this->m_Window);
 	while (!glfwWindowShouldClose(this->m_Window))
 	{
-
 		glfwPollEvents();
-
+		DrawFrame();
 	}
+
+	vkDeviceWaitIdle(this->m_Device);
+
+}
+void Application::DrawFrame()
+{
+	vkWaitForFences(this->m_Device, 1, &this->m_InFlightFences[current_frame], VK_TRUE, UINT64_MAX);
+
+	uint32_t imageIndex = 0;
+	vkAcquireNextImageKHR(this->m_Device, this->m_SwapChain, UINT64_MAX, this->m_ImageAvailableSemaphores[current_frame], VK_NULL_HANDLE, &imageIndex);
+
+	if (this->m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE)
+		vkWaitForFences(this->m_Device, 1, &this->m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+
+	this->m_ImagesInFlight[imageIndex] = this->m_InFlightFences[current_frame];
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { this->m_ImageAvailableSemaphores[current_frame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &this->m_CommandBuffers[imageIndex];
+
+	VkSemaphore signalSemaphores[] = { this->m_RenderFinshedSemaphores[current_frame] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	vkResetFences(this->m_Device, 1, &this->m_InFlightFences[current_frame]);
+	if (vkQueueSubmit(this->m_GraphicsQueue, 1, &submitInfo, this->m_InFlightFences[current_frame]) != VK_SUCCESS)
+	{
+		LOG_CRITICAL("Failed to submit draw buffer command!");
+		exit(-1);
+	}
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { this->m_SwapChain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr;
+
+	vkQueuePresentKHR(this->m_GraphicsQueue, &presentInfo);
+
+	current_frame = (current_frame + 1) % this->MAX_FRAMES_IN_FLIGHT;
 
 }
 void Application::Shutdown()
 {
+
+	for (int i = 0; i < this->MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		vkDestroySemaphore(this->m_Device, this->m_RenderFinshedSemaphores[i], nullptr);
+		vkDestroySemaphore(this->m_Device, this->m_ImageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(this->m_Device, this->m_InFlightFences[i], nullptr);
+	}
 
 	vkDestroyCommandPool(this->m_Device, this->m_CommandPool, nullptr);
 
