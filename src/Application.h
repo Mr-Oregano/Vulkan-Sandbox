@@ -78,6 +78,9 @@ private:
 
 	void CreateFramebuffers();
 
+	void CreateCommandPool();
+	void CreateCommandBuffers();
+
 	void Update();
 	void Shutdown();
 
@@ -109,6 +112,9 @@ private:
 	VkPipeline m_GraphicsPipeline;
 
 	std::vector<VkFramebuffer> m_SwapChainFramebuffers;
+
+	VkCommandPool m_CommandPool;
+	std::vector<VkCommandBuffer> m_CommandBuffers;
 
 	const std::vector<const char *> m_ValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"

@@ -191,6 +191,8 @@ void Application::InitVulkan()
 	this->CreateRenderPass();
 	this->CreateGraphicsPipeline();
 	this->CreateFramebuffers();
+	this->CreateCommandPool();
+	this->CreateCommandBuffers();
 
 }
 
@@ -795,8 +797,6 @@ void Application::CreateGraphicsPipeline()
 	vkDestroyShaderModule(this->m_Device, vertexModule, nullptr);
 	vkDestroyShaderModule(this->m_Device, fragmentModule, nullptr);
 
-	LOG_INFO("Successfully created the graphics pipeline!");
-
 }
 
 void Application::CreateFramebuffers()
@@ -827,6 +827,81 @@ void Application::CreateFramebuffers()
 	}
 }
 
+void Application::CreateCommandPool()
+{
+
+	QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(this->m_PhysicalDevice);
+
+	VkCommandPoolCreateInfo poolCreateInfo = {};
+	poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolCreateInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
+	poolCreateInfo.flags = 0;
+
+	if (vkCreateCommandPool(this->m_Device, &poolCreateInfo, nullptr, &this->m_CommandPool) != VK_SUCCESS)
+	{
+		LOG_CRITICAL("Failed to create command pool!");
+		exit(-1);
+	}
+
+}
+void Application::CreateCommandBuffers()
+{
+
+	this->m_CommandBuffers.resize(this->m_SwapChainFramebuffers.size());
+
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandBufferCount = (uint32_t) this->m_SwapChainFramebuffers.size();
+	allocInfo.commandPool = this->m_CommandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	if (vkAllocateCommandBuffers(this->m_Device, &allocInfo, this->m_CommandBuffers.data()))
+	{
+		LOG_CRITICAL("Failed to create command buffers");
+		exit(-1);
+	}
+
+	for (size_t i = 0; i < this->m_CommandBuffers.size(); ++i)
+	{
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = 0;
+		beginInfo.pInheritanceInfo = nullptr;
+
+		if (vkBeginCommandBuffer(this->m_CommandBuffers[i], &beginInfo) != VK_SUCCESS)
+		{
+			LOG_CRITICAL("Failed to begin recording command buffer!");
+			exit(-1);
+		}
+
+		VkRenderPassBeginInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = this->m_RenderPass;
+		renderPassInfo.framebuffer = this->m_SwapChainFramebuffers[i];
+
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = this->m_SwapChainExtent;
+
+		VkClearValue clearColor = { 0.1f, 0.0f, 0.2f, 1.0f };
+		renderPassInfo.clearValueCount = 1;
+		renderPassInfo.pClearValues = &clearColor;
+
+		vkCmdBeginRenderPass(this->m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindPipeline(this->m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->m_GraphicsPipeline);
+		vkCmdDraw(this->m_CommandBuffers[i], 3, 1, 0, 0);
+		vkCmdEndRenderPass(this->m_CommandBuffers[i]);
+
+		if (vkEndCommandBuffer(this->m_CommandBuffers[i]) != VK_SUCCESS)
+		{
+			LOG_CRITICAL("Failed to complete the the command buffer!");
+			exit(-1);
+		}
+	}
+
+	LOG_INFO("Successfully created all command buffers!");
+
+}
+
 void Application::Update()
 {
 
@@ -841,6 +916,8 @@ void Application::Update()
 }
 void Application::Shutdown()
 {
+
+	vkDestroyCommandPool(this->m_Device, this->m_CommandPool, nullptr);
 
 	for (VkFramebuffer framebuffer : this->m_SwapChainFramebuffers)
 		vkDestroyFramebuffer(this->m_Device, framebuffer, nullptr);
