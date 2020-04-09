@@ -13,6 +13,7 @@
 
 #include <cstring>
 #include <cstdint>
+#include <fstream>
 
 struct QueueFamilyIndices
 {
@@ -71,6 +72,10 @@ private:
 
 	void CreateSwapChainImageViews();
 
+	void CreateRenderPass();
+	VkShaderModule Application::CreateShaderModule(const std::vector<char> &bytes);
+	void CreateGraphicsPipeline();
+
 	void Update();
 	void Shutdown();
 
@@ -96,6 +101,10 @@ private:
 	VkExtent2D m_SwapChainExtent = { 0 };
 
 	std::vector<VkImageView> m_SwapChainImageViews;
+
+	VkRenderPass m_RenderPass;
+	VkPipelineLayout m_PipelineLayout;
+	VkPipeline m_GraphicsPipeline;
 
 	const std::vector<const char *> m_ValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"
