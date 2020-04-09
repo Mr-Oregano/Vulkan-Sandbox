@@ -190,6 +190,7 @@ void Application::InitVulkan()
 	this->CreateSwapChainImageViews();
 	this->CreateRenderPass();
 	this->CreateGraphicsPipeline();
+	this->CreateFramebuffers();
 
 }
 
@@ -798,6 +799,34 @@ void Application::CreateGraphicsPipeline()
 
 }
 
+void Application::CreateFramebuffers()
+{
+
+	this->m_SwapChainFramebuffers.resize(this->m_SwapChainImageViews.size());
+
+	for (int i = 0; i < this->m_SwapChainImageViews.size(); ++i)
+	{
+		VkImageView attachments[] = {
+			this->m_SwapChainImageViews[i]
+		};
+
+		VkFramebufferCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		createInfo.renderPass = this->m_RenderPass;
+		createInfo.attachmentCount = 1;
+		createInfo.pAttachments = attachments;
+		createInfo.width = this->m_SwapChainExtent.width;
+		createInfo.height = this->m_SwapChainExtent.height;
+		createInfo.layers = 1;
+
+		if (vkCreateFramebuffer(this->m_Device, &createInfo, nullptr, &m_SwapChainFramebuffers[i]) != VK_SUCCESS)
+		{
+			LOG_CRITICAL("Failed to create framebuffer!");
+			exit(-1);
+		}
+	}
+}
+
 void Application::Update()
 {
 
@@ -812,6 +841,9 @@ void Application::Update()
 }
 void Application::Shutdown()
 {
+
+	for (VkFramebuffer framebuffer : this->m_SwapChainFramebuffers)
+		vkDestroyFramebuffer(this->m_Device, framebuffer, nullptr);
 
 	vkDestroyPipeline(this->m_Device, this->m_GraphicsPipeline, nullptr);
 

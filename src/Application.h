@@ -76,6 +76,8 @@ private:
 	VkShaderModule Application::CreateShaderModule(const std::vector<char> &bytes);
 	void CreateGraphicsPipeline();
 
+	void CreateFramebuffers();
+
 	void Update();
 	void Shutdown();
 
@@ -105,6 +107,8 @@ private:
 	VkRenderPass m_RenderPass;
 	VkPipelineLayout m_PipelineLayout;
 	VkPipeline m_GraphicsPipeline;
+
+	std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
 	const std::vector<const char *> m_ValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"
