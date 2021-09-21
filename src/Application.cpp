@@ -1053,7 +1053,7 @@ int main(void)
 	util::Log::Init();
 	LOG_INFO("Vulkan Testing");
 
-#ifdef NDEBUG
+#ifdef APP_RELEASE
 	Application app(false);
 #else
 	Application app;
